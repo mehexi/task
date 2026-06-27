@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="mehezi/task"
+REPO="mehexi/task"
 BIN="oc-tasks"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
