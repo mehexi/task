@@ -20,6 +20,12 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lipglos
 
 ## Installation
 
+### Quick install (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mehexi/OC/main/scripts/install.sh | bash
+```
+
 ### Go install
 
 ```bash
