@@ -120,10 +120,16 @@ func (s *scanner) isIgnored(relPath string, isDir bool) bool {
 		checkDir := filepath.Join(s.root, filepath.Join(parts[:i+1]...))
 		if m, ok := s.ignores[filepath.Dir(checkDir)]; ok {
 			name := parts[i]
+			matched := false
+			negate := false
 			for _, p := range m.patterns {
 				if p.match(name, isDir && i == len(parts)-1) {
-					return !p.negate
+					matched = true
+					negate = p.negate
 				}
+			}
+			if matched {
+				return !negate
 			}
 		}
 	}
@@ -326,4 +332,4 @@ func FindComments(rootDir string) ([]CommentItem, error) {
 
 // DONE: add support for multi-line block comments
 // DONE: symlinks can cause infinite loops
-// HACK: using strings.Contains as a quick check
+// DONE: using strings.Contains as a quick check

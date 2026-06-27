@@ -123,5 +123,5 @@ func SaveTasks(projects []Project, tasks []Task, gam Gamification) error {
 	return os.WriteFile(dataFile(), data, 0644)
 }
 
-// TODO: add migration support for schema changes
+// DONE: add migration support for schema changes
 // DONE: json fields use omitempty for backwards compat
