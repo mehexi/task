@@ -1212,8 +1212,6 @@ func (m Model) bodyView() string {
 
 func (m Model) projectsPane(w, h int) string {
 	contentW := w - 4
-	totalContentH := h - 2
-
 	var b strings.Builder
 	for i, p := range m.projects {
 		prefix := "  "
@@ -1234,21 +1232,8 @@ func (m Model) projectsPane(w, h int) string {
 		b.WriteString(DimS.Render("Press 'n' to create"))
 	}
 
-	projStr := b.String()
-	projLines := strings.Count(projStr, "\n")
-	if projStr != "" && !strings.HasSuffix(projStr, "\n") {
-		projLines++
-	}
-
-	profileStr, profileLines := m.buildProfile(contentW, totalContentH-1-projLines)
-
-	if profileLines > 0 {
-		padLines := totalContentH - 1 - projLines - profileLines
-		if padLines > 0 {
-			b.WriteString(strings.Repeat("\n", padLines))
-		}
-		b.WriteString(profileStr)
-	}
+	profileStr, _ := m.buildProfile(contentW, 999)
+	b.WriteString(profileStr)
 
 	style := InactiveBorder.Width(w).Height(h)
 	if m.focus == focusProjects && m.mode == modeNormal {
