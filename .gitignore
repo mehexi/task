@@ -1,0 +1,17 @@
+# Prevent AGENTS.md from being tracked
+AGENTS.md
+
+# Binaries
+task
+oc-tasks
+*.exe
+*.test
+*.out
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
