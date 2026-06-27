@@ -732,6 +732,7 @@ func (m Model) handleProjectsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.activeProj = (m.activeProj - 1 + len(m.projects)) % len(m.projects)
 			m.activeTask = 0
 			m.taskScroll = 0
+			m.invalidateFlatCache()
 			m.updateViewportContent()
 		}
 	case key.Matches(msg, m.keys.Down):
@@ -739,6 +740,7 @@ func (m Model) handleProjectsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.activeProj = (m.activeProj + 1) % len(m.projects)
 			m.activeTask = 0
 			m.taskScroll = 0
+			m.invalidateFlatCache()
 			m.updateViewportContent()
 		}
 	case key.Matches(msg, m.keys.Enter):
@@ -1212,6 +1214,8 @@ func (m Model) bodyView() string {
 
 func (m Model) projectsPane(w, h int) string {
 	contentW := w - 4
+	totalContentH := h - 2
+
 	var b strings.Builder
 	for i, p := range m.projects {
 		prefix := "  "
@@ -1230,10 +1234,20 @@ func (m Model) projectsPane(w, h int) string {
 		b.WriteString(DimS.Render("No projects"))
 		b.WriteString("\n")
 		b.WriteString(DimS.Render("Press 'n' to create"))
+		b.WriteString("\n")
 	}
 
-	profileStr, _ := m.buildProfile(contentW, 999)
-	b.WriteString(profileStr)
+	projStr := b.String()
+	projLines := strings.Count(projStr, "\n")
+
+	profileStr, profileLines := m.buildProfile(contentW, totalContentH-1-projLines)
+	if profileLines > 0 {
+		pad := totalContentH - 1 - projLines - profileLines
+		if pad > 0 {
+			b.WriteString(strings.Repeat("\n", pad))
+		}
+		b.WriteString(profileStr)
+	}
 
 	style := InactiveBorder.Width(w).Height(h)
 	if m.focus == focusProjects && m.mode == modeNormal {
@@ -1252,7 +1266,6 @@ func (m Model) buildProfile(w, maxLines int) (string, int) {
 	alloc := maxLines
 	var sb strings.Builder
 
-	// separator
 	sb.WriteString(DimS.Render(strings.Repeat("─", w)) + "\n")
 	alloc--
 
@@ -1260,7 +1273,13 @@ func (m Model) buildProfile(w, maxLines int) (string, int) {
 		return sb.String(), maxLines - alloc
 	}
 
-	// XP notification (only shows briefly)
+	sb.WriteString(DimS.Render(strings.Repeat("─", w)) + "\n")
+	alloc--
+
+	if alloc <= 0 {
+		return sb.String(), maxLines - alloc
+	}
+
 	if showNotify {
 		sb.WriteString(AccentS.Render(m.xpNotify) + "\n")
 		alloc--
@@ -1270,7 +1289,6 @@ func (m Model) buildProfile(w, maxLines int) (string, int) {
 		return sb.String(), maxLines - alloc
 	}
 
-	// Level + XP bar
 	bar := m.xpBar(w)
 	pct := m.xpPercent()
 	sb.WriteString(fmt.Sprintf("Lv.%d  %s  %d%%\n", m.gamification.Level, bar, pct))
