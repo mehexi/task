@@ -23,7 +23,7 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lipglos
 ### Quick install (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mehexi/task/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/mehexi/task/master/scripts/install.sh | bash
 ```
 
 ### Go install
