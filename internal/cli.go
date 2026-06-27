@@ -131,10 +131,11 @@ func runAdd(args []string) error {
 	if t == "" {
 		return fmt.Errorf("title is required")
 	}
-	projects, tasks, err := LoadTasks()
+	projects, tasks, gam, err := LoadTasks()
 	if err != nil {
 		return err
 	}
+	_ = gam
 	projName := *project
 	if projName == "" && len(projects) > 0 {
 		projName = projects[0].Name
@@ -174,7 +175,7 @@ func runAdd(args []string) error {
 		CreatedAt: time.Now(),
 	}
 	tasks = append(tasks, task)
-	if err := SaveTasks(projects, tasks); err != nil {
+	if err := SaveTasks(projects, tasks, gam); err != nil {
 		return err
 	}
 	return json.NewEncoder(os.Stdout).Encode(task)
@@ -187,10 +188,11 @@ func runList(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	projects, tasks, err := LoadTasks()
+	projects, tasks, gam, err := LoadTasks()
 	if err != nil {
 		return err
 	}
+	_ = gam
 	projNames := make(map[string]string)
 	for _, p := range projects {
 		projNames[p.ID] = p.Name
@@ -228,10 +230,11 @@ func runDone(args []string) error {
 		return fmt.Errorf("task ID is required")
 	}
 	id := args[0]
-	projects, tasks, err := LoadTasks()
+	projects, tasks, gam, err := LoadTasks()
 	if err != nil {
 		return err
 	}
+	_ = gam
 	found := false
 	for i, t := range tasks {
 		if t.ID == id {
@@ -243,7 +246,7 @@ func runDone(args []string) error {
 	if !found {
 		return fmt.Errorf("task not found: %s", id)
 	}
-	if err := SaveTasks(projects, tasks); err != nil {
+	if err := SaveTasks(projects, tasks, gam); err != nil {
 		return err
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]string{"status": "done", "id": id})
@@ -254,10 +257,11 @@ func runDelete(args []string) error {
 		return fmt.Errorf("task ID is required")
 	}
 	id := args[0]
-	projects, tasks, err := LoadTasks()
+	projects, tasks, gam, err := LoadTasks()
 	if err != nil {
 		return err
 	}
+	_ = gam
 	found := false
 	var updated []Task
 	for _, t := range tasks {
@@ -270,7 +274,7 @@ func runDelete(args []string) error {
 	if !found {
 		return fmt.Errorf("task not found: %s", id)
 	}
-	if err := SaveTasks(projects, updated); err != nil {
+	if err := SaveTasks(projects, updated, gam); err != nil {
 		return err
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]string{"status": "deleted", "id": id})
@@ -291,7 +295,7 @@ func runProject(args []string) error {
 }
 
 func runProjectList(_ []string) error {
-	projects, _, err := LoadTasks()
+	projects, _, _, err := LoadTasks()
 	if err != nil {
 		return err
 	}
@@ -309,10 +313,11 @@ func runProjectCreate(args []string) error {
 	if name == "" {
 		return fmt.Errorf("project name is required")
 	}
-	projects, tasks, err := LoadTasks()
+	projects, tasks, gam, err := LoadTasks()
 	if err != nil {
 		return err
 	}
+	_ = gam
 	for _, p := range projects {
 		if strings.EqualFold(p.Name, name) {
 			return json.NewEncoder(os.Stdout).Encode(map[string]string{
@@ -326,7 +331,7 @@ func runProjectCreate(args []string) error {
 		Color: "#7aa2f7",
 	}
 	projects = append(projects, p)
-	if err := SaveTasks(projects, tasks); err != nil {
+	if err := SaveTasks(projects, tasks, gam); err != nil {
 		return err
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]string{
@@ -357,10 +362,11 @@ func runLoad(args []string) error {
 	if len(inputs) == 0 {
 		return fmt.Errorf("no tasks found in file")
 	}
-	projects, tasks, err := LoadTasks()
+	projects, tasks, gam, err := LoadTasks()
 	if err != nil {
 		return err
 	}
+	_ = gam
 	projCache := make(map[string]string)
 	for _, p := range projects {
 		projCache[strings.ToLower(p.Name)] = p.ID
@@ -406,7 +412,7 @@ func runLoad(args []string) error {
 	if len(created) == 0 {
 		return fmt.Errorf("no valid tasks to create")
 	}
-	if err := SaveTasks(projects, tasks); err != nil {
+	if err := SaveTasks(projects, tasks, gam); err != nil {
 		return err
 	}
 	return json.NewEncoder(os.Stdout).Encode(created)
@@ -432,10 +438,11 @@ func runSubtasks(args []string) error {
 		return fmt.Errorf("task ID is required")
 	}
 	id := args[0]
-	projects, tasks, err := LoadTasks()
+	projects, tasks, gam, err := LoadTasks()
 	if err != nil {
 		return err
 	}
+	_ = gam
 	_ = projects
 	projNames := make(map[string]string)
 	for _, p := range projects {

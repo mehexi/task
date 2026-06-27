@@ -40,6 +40,7 @@ const (
 type tasksLoadedMsg struct {
 	projects []Project
 	tasks    []Task
+	gam      Gamification
 }
 
 type scanResultsMsg struct {
@@ -91,6 +92,10 @@ type Model struct {
 
 	flatCache     []flatItem
 	flatCacheOk   bool
+
+	gamification Gamification
+	xpNotify     string
+	xpNotifyAt   time.Time
 }
 
 func New() Model {
@@ -120,11 +125,11 @@ func fileModTime() time.Time {
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		func() tea.Msg {
-			projects, tasks, err := LoadTasks()
+			projects, tasks, gam, err := LoadTasks()
 			if err != nil {
 				return errMsg{err}
 			}
-			return tasksLoadedMsg{projects, tasks}
+			return tasksLoadedMsg{projects, tasks, gam}
 		},
 		tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
 			return tickMsg(t)
@@ -317,12 +322,161 @@ func (m *Model) flatItems() []flatItem {
 }
 
 func (m *Model) save() {
-	if err := SaveTasks(m.projects, m.tasks); err != nil {
+	if err := SaveTasks(m.projects, m.tasks, m.gamification); err != nil {
 		return
 	}
 	if fi, err := os.Stat(dataFile()); err == nil {
 		m.lastMod = fi.ModTime()
 	}
+}
+
+func (m *Model) awardXP(t Task) {
+	xp := 10
+	if t.Priority == High {
+		xp += 10
+	} else if t.Priority == Medium {
+		xp += 5
+	}
+	if t.DueDate != "" {
+		due, err := time.Parse("2006-01-02", t.DueDate)
+		if err == nil && time.Now().After(due) {
+			xp += 5
+		}
+	}
+
+	m.gamification.XP += xp
+	m.gamification.TotalCompleted++
+	if t.Priority == High {
+		m.gamification.HighCompleted++
+	}
+
+	oldLevel := m.gamification.Level
+	for m.gamification.XP >= m.gamification.Level*100 {
+		m.gamification.XP -= m.gamification.Level * 100
+		m.gamification.Level++
+	}
+	m.updateStreak()
+	newAch := m.checkAchievements(t)
+
+	if m.gamification.Level > oldLevel {
+		m.xpNotify = fmt.Sprintf("🎉 Level up! You are now Lv.%d!", m.gamification.Level)
+	} else if newAch != "" {
+		m.xpNotify = fmt.Sprintf("🏆 %s", newAch)
+	} else {
+		needed := m.gamification.Level*100 - m.gamification.XP
+		m.xpNotify = fmt.Sprintf("+%d XP  (%d to Lv.%d)", xp, needed, m.gamification.Level+1)
+	}
+	m.xpNotifyAt = time.Now()
+}
+
+func (m *Model) updateStreak() {
+	today := time.Now().Format("2006-01-02")
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+
+	if m.gamification.LastCompleted == yesterday {
+		m.gamification.Streak++
+	} else if m.gamification.LastCompleted != today {
+		m.gamification.Streak = 1
+	}
+	m.gamification.LastCompleted = today
+	m.gamification.DailyLog[today]++
+
+	if m.gamification.Streak > m.gamification.LongestStreak {
+		m.gamification.LongestStreak = m.gamification.Streak
+	}
+}
+
+func (m *Model) checkAchievements(t Task) string {
+	has := make(map[string]bool)
+	for _, a := range m.gamification.Achievements {
+		has[a] = true
+	}
+
+	names := map[string]string{
+		"first_step":    "First Step",
+		"ten_tasks":     "Getting Started",
+		"century":       "Completionist",
+		"on_fire":       "On Fire",
+		"unstoppable":   "Unstoppable",
+		"prioritizer":   "Prioritizer",
+		"clean_sweep":   "Clean Sweep",
+		"speed_run":     "Speed Run",
+		"early_bird":    "Early Bird",
+		"five_projects": "Organized",
+	}
+
+	add := func(key string) {
+		m.gamification.Achievements = append(m.gamification.Achievements, key)
+	}
+
+	if !has["first_step"] && m.gamification.TotalCompleted >= 1 {
+		add("first_step")
+		return names["first_step"]
+	}
+	if !has["ten_tasks"] && m.gamification.TotalCompleted >= 10 {
+		add("ten_tasks")
+		return names["ten_tasks"]
+	}
+	if !has["century"] && m.gamification.TotalCompleted >= 100 {
+		add("century")
+		return names["century"]
+	}
+	if !has["on_fire"] && m.gamification.Streak >= 7 {
+		add("on_fire")
+		return names["on_fire"]
+	}
+	if !has["unstoppable"] && m.gamification.Streak >= 30 {
+		add("unstoppable")
+		return names["unstoppable"]
+	}
+	if !has["prioritizer"] && m.gamification.HighCompleted >= 10 {
+		add("prioritizer")
+		return names["prioritizer"]
+	}
+	if !has["five_projects"] && len(m.projects) >= 5 {
+		add("five_projects")
+		return names["five_projects"]
+	}
+	if !has["clean_sweep"] {
+		allDone := true
+		for _, task := range m.tasks {
+			if task.ProjectID == t.ProjectID && !task.Done {
+				allDone = false
+				break
+			}
+		}
+		if allDone {
+			add("clean_sweep")
+			return names["clean_sweep"]
+		}
+	}
+	if !has["speed_run"] && time.Since(t.CreatedAt) <= time.Minute {
+		add("speed_run")
+		return names["speed_run"]
+	}
+	if !has["early_bird"] && time.Now().Hour() < 9 {
+		add("early_bird")
+		return names["early_bird"]
+	}
+	return ""
+}
+
+func (m Model) xpPercent() int {
+	needed := m.gamification.Level * 100
+	if needed == 0 {
+		return 0
+	}
+	return m.gamification.XP * 100 / needed
+}
+
+func (m Model) xpBar(w int) string {
+	pct := m.xpPercent()
+	filled := pct * w / 100
+	if filled > w {
+		filled = w
+	}
+	empty := w - filled
+	return strings.Repeat("█", filled) + strings.Repeat("░", empty)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -342,6 +496,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tasksLoadedMsg:
 		m.projects = msg.projects
 		m.tasks = msg.tasks
+		m.gamification = msg.gam
 		m.lastMod = fileModTime()
 		m.invalidateFlatCache()
 		m.updateLayout()
@@ -464,7 +619,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			fi, err := os.Stat(path)
 			if err == nil && !fi.ModTime().Equal(m.lastMod) {
 				m.lastMod = fi.ModTime()
-				if projects, tasks, err := LoadTasks(); err == nil {
+				if projects, tasks, gam, err := LoadTasks(); err == nil {
 					oldProjID := ""
 					if m.activeProj < len(m.projects) {
 						oldProjID = m.projects[m.activeProj].ID
@@ -476,6 +631,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.projects = projects
 					m.tasks = tasks
+					m.gamification = gam
 					m.invalidateFlatCache()
 					m.activeProj = 0
 					for i, p := range m.projects {
@@ -625,12 +781,16 @@ func (m Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			t := items[m.activeTask].task
 			for i := range m.tasks {
 				if m.tasks[i].ID == t.ID {
-					m.tasks[i].Done = !m.tasks[i].Done
+					wasDone := m.tasks[i].Done
+					m.tasks[i].Done = !wasDone
 					if m.tasks[i].Source != nil {
 						updateSourceComment(m.tasks[i].Source, m.tasks[i].Done)
 					}
 					if m.tasks[i].ParentID == "" {
 						m.toggleAllChildren(m.tasks[i].ID, m.tasks[i].Done)
+					}
+					if !wasDone && m.tasks[i].Done {
+						m.awardXP(m.tasks[i])
 					}
 					break
 				}
@@ -1051,6 +1211,9 @@ func (m Model) bodyView() string {
 }
 
 func (m Model) projectsPane(w, h int) string {
+	contentW := w - 4
+	totalContentH := h - 2
+
 	var b strings.Builder
 	for i, p := range m.projects {
 		prefix := "  "
@@ -1071,11 +1234,145 @@ func (m Model) projectsPane(w, h int) string {
 		b.WriteString(DimS.Render("Press 'n' to create"))
 	}
 
+	projStr := b.String()
+	projLines := strings.Count(projStr, "\n")
+	if projStr != "" && !strings.HasSuffix(projStr, "\n") {
+		projLines++
+	}
+
+	profileStr, profileLines := m.buildProfile(contentW, totalContentH-1-projLines)
+
+	if profileLines > 0 {
+		padLines := totalContentH - 1 - projLines - profileLines
+		if padLines > 0 {
+			b.WriteString(strings.Repeat("\n", padLines))
+		}
+		b.WriteString(profileStr)
+	}
+
 	style := InactiveBorder.Width(w).Height(h)
 	if m.focus == focusProjects && m.mode == modeNormal {
 		style = ActiveBorder.Width(w).Height(h)
 	}
 	return style.Render(TitleS.Render("PROJECTS") + "\n" + b.String())
+}
+
+func (m Model) buildProfile(w, maxLines int) (string, int) {
+	if maxLines < 2 {
+		return "", 0
+	}
+
+	showNotify := m.xpNotify != "" && time.Since(m.xpNotifyAt) < 3*time.Second
+
+	alloc := maxLines
+	var sb strings.Builder
+
+	// separator
+	sb.WriteString(DimS.Render(strings.Repeat("─", w)) + "\n")
+	alloc--
+
+	if alloc <= 0 {
+		return sb.String(), maxLines - alloc
+	}
+
+	// XP notification (only shows briefly)
+	if showNotify {
+		sb.WriteString(AccentS.Render(m.xpNotify) + "\n")
+		alloc--
+	}
+
+	if alloc <= 0 {
+		return sb.String(), maxLines - alloc
+	}
+
+	// Level + XP bar
+	bar := m.xpBar(w)
+	pct := m.xpPercent()
+	sb.WriteString(fmt.Sprintf("Lv.%d  %s  %d%%\n", m.gamification.Level, bar, pct))
+	alloc--
+
+	if alloc <= 0 {
+		return sb.String(), maxLines - alloc
+	}
+
+	// Streak
+	if m.gamification.Streak > 0 {
+		sb.WriteString(fmt.Sprintf("🔥 %d-day streak\n", m.gamification.Streak))
+		alloc--
+	}
+
+	if alloc <= 0 {
+		return sb.String(), maxLines - alloc
+	}
+
+	// Stats
+	today := time.Now().Format("2006-01-02")
+	todayCount := m.gamification.DailyLog[today]
+	weekCount := 0
+	now := time.Now()
+	for i := 0; i < 7; i++ {
+		d := now.AddDate(0, 0, -i).Format("2006-01-02")
+		weekCount += m.gamification.DailyLog[d]
+	}
+	monthCount := 0
+	for d, c := range m.gamification.DailyLog {
+		t, err := time.Parse("2006-01-02", d)
+		if err == nil && t.Year() == now.Year() && t.Month() == now.Month() {
+			monthCount += c
+		}
+	}
+	sb.WriteString(fmt.Sprintf("Today: %d  |  Week: %d  |  %d\n", todayCount, weekCount, monthCount))
+	alloc--
+
+	if alloc <= 0 {
+		return sb.String(), maxLines - alloc
+	}
+
+	// Achievements
+	if len(m.gamification.Achievements) > 0 {
+		allKeys := []string{"first_step", "ten_tasks", "century", "on_fire", "unstoppable", "prioritizer", "clean_sweep", "speed_run", "early_bird", "five_projects"}
+		unlocked := 0
+		for _, a := range m.gamification.Achievements {
+			for _, k := range allKeys {
+				if a == k {
+					unlocked++
+					break
+				}
+			}
+		}
+
+		achNames := map[string]string{
+			"first_step": "First Step", "ten_tasks": "Getting Started", "century": "Completionist",
+			"on_fire": "On Fire", "unstoppable": "Unstoppable", "prioritizer": "Prioritizer",
+			"clean_sweep": "Clean Sweep", "speed_run": "Speed Run", "early_bird": "Early Bird",
+			"five_projects": "Organized",
+		}
+
+		header := fmt.Sprintf("── Achievements (%d/%d) ──", unlocked, len(allKeys))
+		sb.WriteString(DimS.Render(header) + "\n")
+		alloc--
+
+		if alloc > 0 {
+			for i := 0; i < len(m.gamification.Achievements) && alloc > 0; i += 2 {
+				left := "✅ " + achNames[m.gamification.Achievements[i]]
+				right := ""
+				if i+1 < len(m.gamification.Achievements) {
+					right = "  ✅ " + achNames[m.gamification.Achievements[i+1]]
+				}
+				line := left + right
+				if lipgloss.Width(line) > w {
+					line = truncateWidth(line, w)
+				}
+				sb.WriteString(line)
+				alloc--
+				if i+2 < len(m.gamification.Achievements) && alloc > 0 {
+					sb.WriteString("\n")
+				}
+			}
+		}
+	}
+
+	return sb.String(), maxLines - alloc
 }
 
 func (m *Model) clampTaskScroll() {

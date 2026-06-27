@@ -42,9 +42,22 @@ type Project struct {
 	CodeDir  string `json:"code_dir,omitempty"`
 }
 
+type Gamification struct {
+	XP             int            `json:"xp"`
+	Level          int            `json:"level"`
+	Streak         int            `json:"streak"`
+	LongestStreak  int            `json:"longest_streak"`
+	LastCompleted  string         `json:"last_completed_date"`
+	Achievements   []string       `json:"achievements"`
+	DailyLog       map[string]int `json:"daily_log"`
+	HighCompleted  int            `json:"high_completed"`
+	TotalCompleted int            `json:"total_completed"`
+}
+
 type taskData struct {
-	Projects []Project `json:"projects"`
-	Tasks    []Task    `json:"tasks"`
+	Projects     []Project     `json:"projects"`
+	Tasks        []Task        `json:"tasks"`
+	Gamification Gamification  `json:"gamification"`
 }
 
 func dataDir() string {
@@ -67,18 +80,18 @@ func dataFile() string {
 	return filepath.Join(dataDir(), "tasks.json")
 }
 
-func LoadTasks() ([]Project, []Task, error) {
+func LoadTasks() ([]Project, []Task, Gamification, error) {
 	path := dataFile()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []Project{}, []Task{}, nil
+			return []Project{}, []Task{}, Gamification{}, nil
 		}
-		return nil, nil, err
+		return nil, nil, Gamification{}, err
 	}
 	var td taskData
 	if err := json.Unmarshal(data, &td); err != nil {
-		return nil, nil, err
+		return nil, nil, Gamification{}, err
 	}
 	if td.Projects == nil {
 		td.Projects = []Project{}
@@ -86,14 +99,23 @@ func LoadTasks() ([]Project, []Task, error) {
 	if td.Tasks == nil {
 		td.Tasks = []Task{}
 	}
-	return td.Projects, td.Tasks, nil
+	if td.Gamification.Achievements == nil {
+		td.Gamification.Achievements = []string{}
+	}
+	if td.Gamification.DailyLog == nil {
+		td.Gamification.DailyLog = make(map[string]int)
+	}
+	if td.Gamification.Level == 0 {
+		td.Gamification.Level = 1
+	}
+	return td.Projects, td.Tasks, td.Gamification, nil
 }
 
-func SaveTasks(projects []Project, tasks []Task) error {
+func SaveTasks(projects []Project, tasks []Task, gam Gamification) error {
 	if err := ensureDir(); err != nil {
 		return err
 	}
-	td := taskData{Projects: projects, Tasks: tasks}
+	td := taskData{Projects: projects, Tasks: tasks, Gamification: gam}
 	data, err := json.MarshalIndent(td, "", "  ")
 	if err != nil {
 		return err
