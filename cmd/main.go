@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"oc-tasks/internal"
+	"github.com/mehexi/task/internal"
 )
 
 func main() {

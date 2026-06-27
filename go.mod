@@ -1,4 +1,4 @@
-module oc-tasks
+module github.com/mehexi/task
 
 go 1.21
 
