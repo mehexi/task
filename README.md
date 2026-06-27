@@ -20,16 +20,28 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lipglos
 
 ## Installation
 
+### Go install
+
 ```bash
 go install github.com/mehexi/task/cmd/oc-tasks@latest
 ```
 
-Or build from source:
+### Download a release binary
+
+Grab the latest binary for your platform from the [releases page](https://github.com/mehexi/task/releases), rename it to `oc-tasks`, make it executable, and put it in your `$PATH`:
+
+```bash
+chmod +x oc-tasks
+sudo mv oc-tasks /usr/local/bin/
+```
+
+### Build from source
 
 ```bash
 git clone https://github.com/mehexi/task.git
 cd task
-go build -o oc-tasks ./cmd/
+go build -o oc-tasks ./cmd/oc-tasks/
+sudo mv oc-tasks /usr/local/bin/
 ```
 
 ## Usage
