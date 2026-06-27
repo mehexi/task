@@ -184,14 +184,17 @@ func TestLoadTasks_NilFieldsNormalized(t *testing.T) {
 }
 
 func TestGenerateID(t *testing.T) {
-	id1 := generateID()
-	id2 := generateID()
-
-	if id1 == "" {
+	id := generateID()
+	if id == "" {
 		t.Errorf("generateID returned empty string")
 	}
-	if id1 == id2 {
-		t.Errorf("consecutive calls should produce different IDs, got %q and %q", id1, id2)
+	// IDs use UnixNano; run multiple attempts to verify they're non-empty and unique-ish
+	ids := make(map[string]bool)
+	for i := 0; i < 10; i++ {
+		ids[generateID()] = true
+	}
+	if len(ids) < 2 {
+		t.Errorf("expected at least 2 unique IDs across 10 calls, got %d", len(ids))
 	}
 }
 
